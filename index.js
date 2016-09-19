@@ -6,6 +6,8 @@ var moment = require('moment');
 var mustache = require('mustache');
 var extend = require('node.extend');
 var program = require('commander');
+var pngStringify = require('console-png');
+var prompt = require('prompt');
 
 var request = require('request');
 request = request.defaults({
@@ -50,12 +52,11 @@ function doParse() {
                 var link = self.find('a.xst');
                 var title = link.text();
                 var href = host + link.attr('href');
-                var pubdate = moment(self.find('td').eq(2).find('em').text(), "YYYY-M-D");
+                var pubdate = moment(self.find('td').eq(1).find('em').text(), "YYYY-M-D");
 
                 // 是否有效
                 var isvalidBook = pubdate.diff(moment(lastUpdate)) >= 0;
                 var titleLowercase = title.toLowerCase();
-
                 if (isvalidBook) {
                     // 先过滤无效的书籍
                     excludes.forEach(function(keyword) {
@@ -159,28 +160,48 @@ request.get(loginUrl, function(error, response, body) {
     var $ = cheerio.load(iconv.decode(body, 'GBK'));
     var loginForm = $('form[name=login]');
     var loginUrl = host + loginForm.attr('action');
+    var seccodehash = /updateseccode\('(\w+)'/.test(loginForm.find('[reload="1"]').text()) && RegExp.$1;
     var loginParams = {};
     loginForm.serializeArray().forEach(function(item) {
         loginParams[item.name] = item.value;
     });
     extend(loginParams, config.account, {
         referer: getPageUrl(1),
+        seccodemodid: 'member::logging',
+        seccodehash: seccodehash,
         loginsubmit: true
     });
-
-    request.post({
-        url: loginUrl,
-        form: loginParams
-    }, function(err, response, body) {
-        body = iconv.decode(body, 'GBK');
-        if (/(登录失败，您还可以尝试 \d 次)/.test(body)) {
-            console.log(RegExp.$1);
-        } else {
-            console.log('登陆成功，开始图书分析及抓取！');
-            console.log('');
-            console.log('========================= 抓取开始 =========================');
-            // 开始抓取
-            doParse();
+    // 请求验证码
+    request.get('http://www.itpub.net/misc.php?mod=seccode&update=21342&idhash=' + seccodehash, {
+        headers: {
+            'referer': getPageUrl(1)
         }
+    }, function(error, response, body) {
+        // 控制台打印验证码
+        pngStringify(body, function (err, string) {
+            if (err) throw err;
+            // 打印验证码
+            console.log(string);
+            prompt.start();
+            // 获取用户输入的验证码
+            prompt.get(['secCode'], function(err, result) {
+                loginParams.seccodeverify = result.secCode;
+                request.post({
+                    url: loginUrl,
+                    form: loginParams
+                }, function(err, response, body) {
+                    var $ = cheerio.load(iconv.decode(body, 'GBK'));
+                    if ($('.alert_error').length) {
+                        console.log($('.alert_error p').text());
+                    } else {
+                        console.log('登陆成功，开始图书分析及抓取！');
+                        console.log('');
+                        console.log('========================= 抓取开始 =========================');
+                        // 开始抓取
+                        doParse();
+                    }
+                });
+            });
+        });
     });
 });

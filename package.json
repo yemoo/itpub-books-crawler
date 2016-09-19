@@ -11,10 +11,12 @@
   "dependencies": {
     "cheerio": "^0.20.0",
     "commander": "^2.9.0",
+    "console-png": "^1.1.0",
     "iconv-lite": "^0.4.13",
     "moment": "^2.13.0",
     "mustache": "^2.2.1",
     "node.extend": "^1.1.5",
+    "prompt": "^1.0.0",
     "request": "^2.72.0"
   }
 }
